@@ -1,0 +1,88 @@
+import pandas as pd
+
+# 校验函数
+def is_not_empty(value):
+    return value is not None and value != ""
+
+def is_valid_format(value, pattern):
+    import re
+    return re.fullmatch(pattern, str(value)) is not None if pattern else True
+
+def is_within_range(value, min_val, max_val):
+    return min_val <= value <= max_val if min_val is not None and max_val is not None else True
+
+# 读取Excel文件
+def read_excel(file_path):
+    return pd.read_excel(file_path)
+
+# 校验每一行
+def validate_rows(df, rules):
+    errors = []
+    for index, row in df.iterrows():
+        for col, (required, pattern, min_val, max_val) in rules.items():
+            value = row[col]
+            if required and is_not_empty(value) is False:
+                errors.append(f"Row {index + 2}: '{col}' is required but empty.")
+            if pattern and is_valid_format(value, pattern) is False:
+                errors.append(f"Row {index + 2}: '{col}' does not match the required format.")
+            if isinstance(value, (int, float)) and not is_within_range(value, min_val, max_val):
+                errors.append(f"Row {index + 2}: '{col}' is out of the allowed range ({min_val} to {max_val}).")
+    return errors
+
+# 校验字段组合是否唯一
+def validate_unique_combinations(df, unique_fields):
+    seen_combinations = set()
+    errors = []
+    for index, row in df.iterrows():
+        combination = tuple(row[unique_fields])
+        if combination in seen_combinations:
+            fields_str = ', '.join(f"{field}={row[field]}" for field in unique_fields)
+            errors.append(f"Row {index + 2}: Duplicate combination found ({fields_str}).")
+        else:
+            seen_combinations.add(combination)
+    return errors
+
+# 保存错误报告到Excel
+def save_error_report(errors, output_file):
+    if errors:
+        error_df = pd.DataFrame(errors, columns=['Error'])
+        error_df.to_excel(output_file, index=False)
+    else:
+        print("No errors found.")
+
+# 主函数
+def main(excel_file_path, error_report_file):
+    # 读取Excel文件
+    df = read_excel(excel_file_path)
+    
+    # 定义校验规则
+    rules = {
+        'a': (True, None, None, None),  # 示例：字段a必填，无格式和范围限制
+        'b': (True, r'\d+', None, None), # 示例：字段b为数字，格式为正则表达式
+        'c': (True, None, 0, 100),       # 示例：字段c为数字，范围0到100
+        # 其他字段规则...
+    }
+    
+    # 校验字段组合是否唯一
+    unique_fields = ['a', 'b', 'c']
+    
+    # 校验数据
+    row_errors = validate_rows(df, rules)
+    unique_errors = validate_unique_combinations(df, unique_fields)
+    
+    # 合并错误列表
+    all_errors = row_errors + unique_errors
+    
+    # 保存错误报告
+    save_error_report(all_errors, error_report_file)
+    
+    # 打印错误数量
+    print(f"Total errors found: {len(all_errors)}")
+
+# Excel文件路径和错误报告文件路径
+excel_file_path = 'path_to_your_excel_file.xlsx'
+error_report_file = 'error_report.xlsx'
+
+# 执行主函数
+if __name__ == "__main__":
+    main(excel_file_path, error_report_file)
